@@ -106,38 +106,46 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
     });
   }
+async createAdminUser(payload: CreateUserDto) {
+  const trimmed = payload.email.trim().toLowerCase();
 
-  async createAdminUser(payload: CreateUserDto) {
-    const trimmed = payload.email.trim().toLowerCase();
-    const existing = await this.prisma.user.findFirst({
-      where: { email: { equals: trimmed, mode: 'insensitive' } },
-    });
-    if (existing) {
-      throw new BadRequestException('A user with this email already exists.');
-    }
+  const existing = await this.prisma.user.findFirst({
+    where: { email: { equals: trimmed, mode: 'insensitive' } },
+  });
 
-    const temporaryPassword = this.generateTemporaryPassword();
-    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
-
-    const user = await this.prisma.user.create({
-      data: {
-        displayName: payload.displayName,
-        email: trimmed,
-        passwordHash,
-        role: payload.role as any,
-        restaurantId: payload.restaurantId || null,
-        mustChangePassword: true,
-      },
-    });
-
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      displayName: user.displayName,
-      temporaryPassword,
-    };
+  if (existing) {
+    throw new BadRequestException('A user with this email already exists.');
   }
+
+  const temporaryPassword = this.generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+  const user = await this.prisma.user.create({
+    data: {
+      displayName: payload.displayName,
+      email: trimmed,
+      passwordHash,
+      role: payload.role as any,
+      restaurantId: payload.restaurantId || null,
+      mustChangePassword: true,
+    },
+  });
+
+  // SEND EMAIL HERE
+  await this.notificationsService.sendRestaurantCredentials({
+    email: user.email,
+    phone: '',
+    password: temporaryPassword,
+    restaurantName: 'Admin Portal',
+  });
+
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    displayName: user.displayName,
+  };
+}
 
   private generateTemporaryPassword() {
     return Math.random().toString(36).slice(-8) + 'A1!';

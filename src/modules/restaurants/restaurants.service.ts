@@ -14,8 +14,10 @@ export class RestaurantsService {
   constructor(
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepository: Repository<RestaurantEntity>,
+
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
+
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -29,7 +31,9 @@ export class RestaurantsService {
     });
 
     if (duplicate) {
-      throw new BadRequestException('A restaurant with the same contact or address already exists.');
+      throw new BadRequestException(
+        'A restaurant with the same contact or address already exists.',
+      );
     }
 
     const suspicious = this.detectPotentialFraud(payload);
@@ -59,7 +63,9 @@ export class RestaurantsService {
       brandDescription: payload.brandDescription,
       cuisineTags: payload.cuisineTags,
       serviceRadiusKm: payload.serviceRadiusKm,
-      deliveryZones: payload.deliveryZones ? JSON.parse(JSON.stringify(payload.deliveryZones)) : undefined,
+      deliveryZones: payload.deliveryZones
+        ? JSON.parse(JSON.stringify(payload.deliveryZones))
+        : undefined,
       temporaryClosure: payload.temporaryClosure ?? false,
       holidayMode: payload.holidayMode ?? false,
       gstExpiryDate: payload.gstExpiryDate,
@@ -67,23 +73,29 @@ export class RestaurantsService {
       status: suspicious ? 'review' : payload.status || 'pending',
       onboardingStep: 2,
     });
+
     const savedRestaurant = await this.restaurantRepository.save(restaurant);
 
+    // generate temporary password
     const temporaryPassword = this.generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
+    // create restaurant admin user
     const user = this.userRepository.create({
+      displayName: payload.ownerName,
       email: payload.email,
       passwordHash,
       role: UserRole.RestaurantAdmin,
       restaurant: savedRestaurant,
       mustChangePassword: true,
     });
+
     await this.userRepository.save(user);
 
+    // send credentials email
     await this.notificationsService.sendRestaurantCredentials({
       email: payload.email,
-      phone: payload.phone,
+      phone: payload.phone || '',
       password: temporaryPassword,
       restaurantName: payload.name,
     });
@@ -93,20 +105,33 @@ export class RestaurantsService {
 
   private detectPotentialFraud(payload: CreateRestaurantDto) {
     const freeDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'];
+
     const emailDomain = payload.email.split('@').pop()?.toLowerCase() ?? '';
+
     const highRisk = freeDomains.includes(emailDomain);
+
     const missingGeo = !payload.latitude || !payload.longitude;
+
     return highRisk || missingGeo;
   }
 
-  async createRestaurantUser(restaurantId: string, payload: CreateRestaurantUserDto) {
+  async createRestaurantUser(
+    restaurantId: string,
+    payload: CreateRestaurantUserDto,
+  ) {
     const restaurant = await this.findOne(restaurantId);
-    const existingUser = await this.userRepository.findOne({ where: { email: payload.email } });
+
+    const existingUser = await this.userRepository.findOne({
+      where: { email: payload.email },
+    });
+
     if (existingUser) {
       throw new BadRequestException('A user with this email already exists.');
     }
 
-    const temporaryPassword = payload.password || this.generateTemporaryPassword();
+    const temporaryPassword =
+      payload.password || this.generateTemporaryPassword();
+
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
     const user = this.userRepository.create({
@@ -119,9 +144,11 @@ export class RestaurantsService {
     });
 
     const savedUser = await this.userRepository.save(user);
+
+    // send credentials email
     await this.notificationsService.sendRestaurantCredentials({
       email: savedUser.email,
-      phone: restaurant.phone,
+      phone: restaurant.phone || '',
       password: temporaryPassword,
       restaurantName: restaurant.name,
     });
@@ -137,32 +164,49 @@ export class RestaurantsService {
 
   async findUsersByRestaurant(restaurantId: string) {
     const restaurant = await this.findOne(restaurantId);
+
     return this.userRepository.find({
       where: { restaurant: { id: restaurant.id } },
-      select: ['id', 'email', 'role', 'displayName', 'isActive', 'createdAt'],
+      select: [
+        'id',
+        'email',
+        'role',
+        'displayName',
+        'isActive',
+        'createdAt',
+      ],
     });
   }
 
   async findAll() {
-    return this.restaurantRepository.find({ order: { createdAt: 'DESC' } });
+    return this.restaurantRepository.find({
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async findOne(id: string) {
-    const restaurant = await this.restaurantRepository.findOne({ where: { id } });
+    const restaurant = await this.restaurantRepository.findOne({
+      where: { id },
+    });
+
     if (!restaurant) {
       throw new NotFoundException('Restaurant not found');
     }
+
     return restaurant;
   }
 
   async update(id: string, payload: UpdateRestaurantDto) {
     const restaurant = await this.findOne(id);
+
     Object.assign(restaurant, payload);
+
     return this.restaurantRepository.save(restaurant);
   }
 
   async getOnboardingStatus(id: string) {
     const restaurant = await this.findOne(id);
+
     return {
       id: restaurant.id,
       status: restaurant.status,
@@ -181,6 +225,7 @@ export class RestaurantsService {
 
   async advanceOnboardingStep(id: string, step: number) {
     const restaurant = await this.findOne(id);
+
     restaurant.onboardingStep = Math.max(restaurant.onboardingStep, step);
 
     if (restaurant.onboardingStep >= 5) {
@@ -190,16 +235,37 @@ export class RestaurantsService {
     return this.restaurantRepository.save(restaurant);
   }
 
-  private calculateRiskScore(payload: CreateRestaurantDto, suspicious: boolean) {
+  private calculateRiskScore(
+    payload: CreateRestaurantDto,
+    suspicious: boolean,
+  ) {
     let score = 0;
+
     if (suspicious) score += 0.5;
+
     if (!payload.latitude || !payload.longitude) score += 0.2;
-    if (payload.email?.includes('gmail.com') || payload.email?.includes('yahoo.com')) score += 0.2;
+
+    if (
+      payload.email?.includes('gmail.com') ||
+      payload.email?.includes('yahoo.com')
+    )
+      score += 0.2;
+
     if (!payload.gstNumber || !payload.fssaiNumber) score += 0.1;
+
     return Math.min(score, 1);
   }
 
   private generateTemporaryPassword() {
-    return Math.random().toString(36).slice(-8) + 'A1!';
+    const chars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#';
+
+    let password = '';
+
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+
+    return password;
   }
 }
