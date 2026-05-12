@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { createDecipheriv } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DeliveryPartnerEntity } from '../../entities/delivery-partner.entity';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +16,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly notificationsService: NotificationsService,
+    @InjectRepository(DeliveryPartnerEntity)
+    private readonly partnerRepository: Repository<DeliveryPartnerEntity>,
   ) {}
 
   private decryptPassword(encrypted: string): string {
@@ -149,6 +154,39 @@ async createAdminUser(payload: CreateUserDto) {
 
   private generateTemporaryPassword() {
     return Math.random().toString(36).slice(-8) + 'A1!';
+  }
+
+  async partnerLogin(payload: LoginRequestDto) {
+    const partner = await this.partnerRepository.findOne({
+      where: { email: payload.email.trim().toLowerCase() },
+    });
+
+    if (!partner || !partner.passwordHash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const password = this.decryptPassword(payload.password);
+    const valid = await bcrypt.compare(password, partner.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const token = this.jwtService.sign({
+      sub: partner.id,
+      role: 'DeliveryPartner',
+      partnerId: partner.id,
+    });
+
+    return {
+      accessToken: token,
+      partner: {
+        id: partner.id,
+        name: partner.name,
+        email: partner.email,
+        status: partner.status,
+        vehicleType: partner.vehicleType,
+      },
+    };
   }
 
   async resetPassword(token: string, encryptedPassword: string) {

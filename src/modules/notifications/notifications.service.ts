@@ -14,6 +14,12 @@ export interface SendPasswordResetPayload {
   resetToken: string;
 }
 
+export interface SendDeliveryPartnerCredentialsPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -55,6 +61,32 @@ Thank you.
     });
 
     this.logger.log(`Credentials email sent to ${payload.email}`);
+  }
+
+  async sendDeliveryPartnerCredentials(payload: SendDeliveryPartnerCredentialsPayload) {
+    const subject = `Delivery Partner Account Created – Login Details`;
+
+    const body = `
+Hello ${payload.name},
+
+Your delivery partner account has been created successfully.
+
+Login Email   : ${payload.email}
+Temporary Password: ${payload.password}
+
+Please login and change your password immediately.
+
+Thank you.
+`;
+
+    await this.transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: payload.email,
+      subject,
+      text: body,
+    });
+
+    this.logger.log(`Delivery partner credentials email sent to ${payload.email}`);
   }
 
   async sendPasswordReset(payload: SendPasswordResetPayload) {

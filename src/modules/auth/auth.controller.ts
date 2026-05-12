@@ -16,6 +16,11 @@ export class AuthController {
     return this.authService.login(payload);
   }
 
+  @Post('partner/login')
+  async partnerLogin(@Body() payload: LoginRequestDto) {
+    return this.authService.partnerLogin(payload);
+  }
+
   @Post('password-reset')
   async requestPasswordReset(@Body('email') email: string) {
     return this.authService.requestPasswordReset(email);
