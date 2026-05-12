@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { BeforeInsert, BeforeUpdate, Column, Entity, ManyToOne, PrimaryColumn } from 'typeorm';
+import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { RestaurantEntity } from './restaurant.entity';
 
 export enum PaymentType {
@@ -42,6 +42,7 @@ export class PaymentEntity {
   }
 
   @ManyToOne(() => RestaurantEntity, { nullable: false, eager: false })
+  @JoinColumn({ name: 'restaurant_id' })
   restaurant: RestaurantEntity;
 
   @Column({ name: 'restaurant_id', type: 'text' })

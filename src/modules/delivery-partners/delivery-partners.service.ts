@@ -82,7 +82,7 @@ export class DeliveryPartnersService {
   async findAll(page = 1, limit = 20, status?: DeliveryPartnerStatus) {
     const query = this.partnerRepository
       .createQueryBuilder('p')
-      .where('p.deleted_at IS NULL')
+      .where('p.deletedAt IS NULL')
       .orderBy('p.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -178,11 +178,11 @@ export class DeliveryPartnersService {
     const partners = await this.partnerRepository
       .createQueryBuilder('p')
       .where('p.status = :status', { status: DeliveryPartnerStatus.ACTIVE })
-      .andWhere('p.is_online = true')
-      .andWhere('p.is_available = true')
-      .andWhere('p.deleted_at IS NULL')
-      .andWhere('p.current_latitude IS NOT NULL')
-      .andWhere('p.current_longitude IS NOT NULL')
+      .andWhere('p.isOnline = true')
+      .andWhere('p.isAvailable = true')
+      .andWhere('p.deletedAt IS NULL')
+      .andWhere('p.currentLatitude IS NOT NULL')
+      .andWhere('p.currentLongitude IS NOT NULL')
       .getMany();
 
     return partners

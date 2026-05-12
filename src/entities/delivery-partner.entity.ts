@@ -19,7 +19,7 @@ export enum VehicleType {
   ELECTRIC_SCOOTER = 'ELECTRIC_SCOOTER',
 }
 
-@Entity({ name: 'DeliveryPartner' })
+@Entity({ name: 'delivery_partners' })
 export class DeliveryPartnerEntity {
   @PrimaryColumn({ type: 'text' })
   id: string;
