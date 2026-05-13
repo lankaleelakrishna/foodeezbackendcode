@@ -41,13 +41,22 @@ export class AuthService {
     });
   }
 
-  async validateUser(email: string, encryptedPassword: string) {
-    const user = await this.findUserByEmail(email);
-    if (!user) return null;
-    const password = this.decryptPassword(encryptedPassword);
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    return valid ? user : null;
+async validateUser(email: string, encryptedPassword: string) {
+  const user = await this.findUserByEmail(email);
+  if (!user) return null;
+
+  let password: string;
+
+  try {
+    password = this.decryptPassword(encryptedPassword);
+  } catch {
+    password = encryptedPassword;
   }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+
+  return valid ? user : null;
+}
 
   async login(payload: LoginRequestDto) {
     const user = await this.validateUser(payload.email, payload.password);
